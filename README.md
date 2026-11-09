@@ -75,7 +75,7 @@ CUDA_VISIBLE_DEVICES=0 \
 2. 選んだ WAV からボイスファイルを作成
 
    ```bash
-   ./speech.cpp/build/speech voice irodori-tts:q8_0 candidate.wav heroine.voice.gguf
+   ./speech.cpp/build/speech voice irodori-tts:q8_0 candidate.wav voices/heroine.voice.gguf
    ```
 
 - 参照用 WAV は1文。複数文だと `speech serve` が文ごとに合成し、WAV 内で声が変わり得る
@@ -111,22 +111,6 @@ CUDA_VISIBLE_DEVICES=0 \
 
 - 「停止」で翻訳・音声合成・再生をすべて中断
 - 改行ごとに段落として翻訳（`<br>`、`<pre>` の改行でも分割）
-
-## 別 PC の Chrome から使う（Tailscale など）
-
-1. 両サーバーに `--host 0.0.0.0`（既定は `127.0.0.1` のみ）
-2. 別 PC の拡張 ID も `--cors-origin` に追加（複数指定可）
-
-   ```bash
-   --cors-origin chrome-extension://<拡張ID_1> \
-   --cors-origin chrome-extension://<拡張ID_2>
-   ```
-
-3. 別 PC の拡張のオプションで接続先をサーバーのアドレスに
-   （`http://<サーバーのアドレス>:8000`、`http://<サーバーのアドレス>:8080`）
-
-- `0.0.0.0` だと同じネットワークの機器からもアクセス可
-- `127.0.0.1` 以外で待ち受けると `speech serve` の `--open` の Web ページは使用不可（拡張は影響なし）
 
 ## エラー時
 

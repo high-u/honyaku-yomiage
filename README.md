@@ -1,23 +1,21 @@
 # honyaku-yomiage
 
-Web ページで選択した英文を、国産の生成 AI で日本語に翻訳して読み上げる Chrome 拡張です。
+選択した英文を日本語に翻訳して読み上げる Chrome 拡張。国産生成 AI を使用。
 
 - 翻訳: [PLaMo 3 Translate](https://huggingface.co/pfnet/plamo-3-translate-2b-GGUF)（[llama.cpp](https://github.com/ggml-org/llama.cpp) の `llama-server`）
 - 音声合成: [Irodori-TTS](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small)（[speech.cpp](https://github.com/nyosegawa/speech.cpp) の `speech serve`）
 
-サーバーはどちらも手元の PC で動かします。Chrome は同じ PC でも、Tailscale などで繋がった別の PC でも使えます。
-
 ## 仕組み
 
-1. 選択した英文を改行ごとに段落に分ける
-2. 段落ごとに翻訳し、訳文をサイドパネルに表示する
-3. 訳文を文ごとに分けて音声合成する
-4. 順番に再生し、読み上げ中の文をハイライトする
+1. 選択範囲を改行ごとに段落に分割
+2. 段落ごとに翻訳、訳文をサイドパネルに表示
+3. 訳文を文ごとに分割して音声合成
+4. 順に再生、読み上げ中の文をハイライト
 
-翻訳・音声合成・再生はキューでつないで非同期に並行して進めます。フォールバックはしません。
-エラーが起きたら、その時点で全部止めてエラーを表示します。
+- 翻訳・音声合成・再生はキューでつないで非同期に並行
+- フォールバックなし。エラー時は全部止めて表示
 
-## 1. サーバーを用意する
+## サーバー
 
 ### speech.cpp のビルド（Linux / Vulkan）
 
@@ -30,7 +28,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_VULKAN=ON
 cmake --build build --config Release -j$(nproc)
 ```
 
-### 翻訳サーバー（ポート 8000）
+### 翻訳サーバー（8000）
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
@@ -38,9 +36,9 @@ llama-server -hf pfnet/plamo-3-translate-2b-GGUF:Q4_K_M \
   -c 16384 --port 8000 --alias plamo-3-translate --jinja --no-prefill-assistant
 ```
 
-`--alias` は `plamo-3-translate` にしてください。拡張はこの名前でモデルを指定します。
+- `--alias` は `plamo-3-translate` 固定（拡張側のモデル名）
 
-### 音声合成サーバー（ポート 8080）
+### 音声合成サーバー（8080）
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
@@ -55,21 +53,16 @@ CUDA_VISIBLE_DEVICES=0 \
       --truncation-factor 0.7
 ```
 
-- `--cors-origin` には、拡張を読み込んだときの拡張 ID を指定します（「2. 拡張機能を読み込む」）。
-  指定がないと、拡張からのリクエストは 403 `origin_not_allowed` で拒否されます。
-- 拡張はリクエストで `voice` などを送らないため、ここで指定した値がそのまま使われます。
-  変更したらサーバーを起動し直してください。
-- `--device` は使う GPU です。`speech devices` で一覧できます。
-- ボイスファイル（`heroine.voice.gguf`）の作り方は「ボイスファイル」を参照してください。
-  ボイスファイルなしで試すなら、`--add-voice` を外して `--voice none` にします。
+- `--cors-origin` なしだと拡張からのリクエストは 403 `origin_not_allowed`
+- 拡張は `voice` などを送らない。サーバーの指定がそのまま既定値
+- `--device` の一覧は `speech devices`
+- ボイスファイルなしなら `--add-voice` を外して `--voice none`
 
 ### ボイスファイル
 
-`--voice none` は参照音声なしでモデルが声を決めるため、文ごとに声が少し変わることがあります。
-気に入った声の WAV からボイスファイルを作って渡すと、声が安定します。
+- `--voice none` は文ごとに声が少し揺れる → 参照音声で固定
 
-1. `--voice none` のサーバーに、声を言葉で説明する `instructions` と `seed` を変えながら1文ずつ合成させ、
-   気に入った WAV を選ぶ
+1. `--voice none` のサーバーで `instructions` と `seed` を変えて候補を合成
 
    ```bash
    curl -o candidate.wav -H 'Content-Type: application/json' \
@@ -77,90 +70,80 @@ CUDA_VISIBLE_DEVICES=0 \
      http://127.0.0.1:8080/v1/audio/speech
    ```
 
-2. その WAV からボイスファイルを作る
+2. 選んだ WAV からボイスファイルを作成
 
    ```bash
    ./speech.cpp/build/speech voice irodori-tts:q8_0 candidate.wav heroine.voice.gguf
    ```
 
-参照用の WAV は1文にしてください。複数の文を渡すと `speech serve` が文ごとに分けて合成するため、
-1つの WAV の中で声が変わることがあります。
+- 参照用 WAV は1文。複数文だと `speech serve` が文ごとに合成し、WAV 内で声が変わり得る
 
-## 2. 拡張機能を読み込む
+## 拡張の読み込み
 
-1. Chrome で `chrome://extensions` を開く
-2. 右上の「デベロッパーモード」を有効にする
-3. 「パッケージ化されていない拡張機能を読み込む」を押し、このリポジトリのフォルダを選ぶ
-4. 表示された拡張 ID を `speech serve` の `--cors-origin` に指定する
+1. `chrome://extensions` → デベロッパーモード有効
+2. 「パッケージ化されていない拡張機能を読み込む」→ このフォルダ
+3. 拡張 ID を `--cors-origin` に指定
 
-拡張 ID は読み込んだフォルダの場所で決まります。フォルダを移動したり、別の PC で読み込んだりすると変わります。
+- 拡張 ID はフォルダの場所で決まる。移動・別 PC で変わる
+- コード変更後は拡張を再読み込み
 
-コードを変更したら、`chrome://extensions` で拡張の再読み込みボタンを押してください。
+## 接続先の設定
 
-## 3. 接続先を設定する
-
-サーバーを同じ PC で既定のポートのまま動かす場合は、設定は不要です。
-
-1. ツールバーの拡張アイコンを右クリックして「オプション」を開く
-2. 各サーバーの URL をポートまで含めて入力し、「保存」を押す
+- アイコン右クリック →「オプション」
+- URL はポートまで含めて指定
 
 | 項目 | 既定値 |
 |---|---|
 | 翻訳サーバー（llama-server） | `http://127.0.0.1:8000` |
 | 音声合成サーバー（speech serve） | `http://127.0.0.1:8080` |
 
-- 設定はその PC の Chrome（`chrome.storage.local`）に保存されます。
-- 保存した値は、次に「開始」を押したときから使われます。
-- URL として正しくない値や、`http://`・`https://` で始まらない値は保存せず、エラーを表示します。
+- 保存先は `chrome.storage.local`（PC ごと）
+- 次の「開始」から反映
+- 不正な URL、`http://`・`https://` 以外は保存せずエラー
 
-## 4. 使う
+## 使い方
 
-1. ツールバーの拡張アイコンを押してサイドパネルを開く
-2. ページ上で読み上げたい英文を選択する
-3. 「開始」を押す
+1. アイコンでサイドパネルを開く
+2. 英文を選択
+3. 「開始」
 
-「停止」を押すと、翻訳・音声合成・再生をすべて中断します。
+- 「停止」で翻訳・音声合成・再生をすべて中断
+- 改行ごとに段落として翻訳（`<br>`、`<pre>` の改行でも分割）
 
-選択範囲は改行ごとに段落として分けて翻訳します（`<br>` や `<pre>` の改行でも分かれます）。
+## 別 PC の Chrome から使う（Tailscale など）
 
-## 別の PC の Chrome から使う
-
-サーバーはこの PC、Chrome は Tailscale などで繋がった別の PC で使う場合です。
-
-1. 両方のサーバーを `--host 0.0.0.0` で起動する（既定では `127.0.0.1` でしか待ち受けないため）。
-   同じネットワークの機器からもアクセスできる状態になります。
-2. 別の PC で拡張を読み込み、その拡張 ID も `--cors-origin` に追加する（複数指定できます）。
+1. 両サーバーに `--host 0.0.0.0`（既定は `127.0.0.1` のみ）
+2. 別 PC の拡張 ID も `--cors-origin` に追加（複数指定可）
 
    ```bash
    --cors-origin chrome-extension://<拡張ID_1> \
    --cors-origin chrome-extension://<拡張ID_2>
    ```
 
-3. 別の PC の拡張のオプションで、接続先をサーバーの PC のアドレスにする
-   （例: `http://<サーバーのアドレス>:8000` と `http://<サーバーのアドレス>:8080`）。
+3. 別 PC の拡張のオプションで接続先をサーバーのアドレスに
+   （`http://<サーバーのアドレス>:8000`、`http://<サーバーのアドレス>:8080`）
 
-`speech serve` は `127.0.0.1` 以外で待ち受けると、`--open` の Web ページが使えなくなります。拡張の動作には影響しません。
+- `0.0.0.0` だと同じネットワークの機器からもアクセス可
+- `127.0.0.1` 以外で待ち受けると `speech serve` の `--open` の Web ページは使用不可（拡張は影響なし）
 
-## エラーが出たとき
+## エラー時
 
-- サイドパネルや設定画面に赤字でエラーが表示されます。
-- 詳しいログは、サイドパネルを右クリックして「検証」で開く DevTools のコンソールに出ます。
-- 音声合成サーバーのポート 8080 は llama-server の既定のポートと同じです。llama.cpp の Web UI を
-  `127.0.0.1:8080` で開いたタブが残っていると、speech.cpp に `GET /props` が繰り返し届いて 404 になります。
-  そのタブを閉じてください。
+- サイドパネル・設定画面に赤字で表示
+- 詳細ログはサイドパネル右クリック →「検証」のコンソール
+- `GET /props` の 404 が speech.cpp に繰り返し届く → `127.0.0.1:8080` の llama.cpp Web UI のタブが残っている
 
 ## ファイル構成
 
 | ファイル | 内容 |
 |---|---|
 | `manifest.json` | 拡張の定義（Manifest V3） |
-| `background.js` | アイコンのクリックでサイドパネルを開く |
-| `sidepanel.html` / `sidepanel.js` | 開始・停止、訳文の表示、翻訳・音声合成・再生の処理 |
+| `background.js` | アイコンでサイドパネルを開く |
+| `sidepanel.html` / `sidepanel.js` | 開始・停止、訳文表示、翻訳・音声合成・再生 |
 | `options.html` / `options.js` | 接続先の設定画面 |
 | `lib/settings.js` | 接続先の既定値、読み込み・保存・検証 |
-| `lib/translator.js` | llama-server での翻訳 |
-| `lib/tts.js` | speech serve での音声合成 |
+| `lib/translator.js` | llama-server で翻訳 |
+| `lib/tts.js` | speech serve で音声合成 |
 | `lib/chunker.js` | 段落・文への分割 |
 | `lib/queue.js` | 非同期キュー |
 
-ビルドは不要です。素の JavaScript で書いています。
+- ビルド不要。素の JavaScript

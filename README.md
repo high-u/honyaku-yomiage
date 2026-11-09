@@ -33,6 +33,7 @@ cmake --build build --config Release -j$(nproc)
 ### 翻訳サーバー（ポート 8000）
 
 ```bash
+CUDA_VISIBLE_DEVICES=0 \
 llama-server -hf pfnet/plamo-3-translate-2b-GGUF:Q4_K_M \
   -c 16384 --port 8000 --alias plamo-3-translate --jinja --no-prefill-assistant
 ```
@@ -42,7 +43,9 @@ llama-server -hf pfnet/plamo-3-translate-2b-GGUF:Q4_K_M \
 ### 音声合成サーバー（ポート 8080）
 
 ```bash
+CUDA_VISIBLE_DEVICES=0 \
 ./speech.cpp/build/speech serve irodori-tts:q8_0 \
+      --device Vulkan1 \
       --port 8080 \
       --cors-origin chrome-extension://<拡張ID> \
       --add-voice heroine=heroine.voice.gguf \
@@ -56,7 +59,7 @@ llama-server -hf pfnet/plamo-3-translate-2b-GGUF:Q4_K_M \
   指定がないと、拡張からのリクエストは 403 `origin_not_allowed` で拒否されます。
 - 拡張はリクエストで `voice` などを送らないため、ここで指定した値がそのまま使われます。
   変更したらサーバーを起動し直してください。
-- GPU を選ぶ場合は `--device`（例: `--device Vulkan1`）を付けます。`speech devices` で一覧できます。
+- `--device` は使う GPU です。`speech devices` で一覧できます。
 - ボイスファイル（`heroine.voice.gguf`）の作り方は「ボイスファイル」を参照してください。
   ボイスファイルなしで試すなら、`--add-voice` を外して `--voice none` にします。
 

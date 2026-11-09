@@ -33,7 +33,8 @@ cmake --build build --config Release -j$(nproc)
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
 llama-server -hf pfnet/plamo-3-translate-2b-GGUF:Q4_K_M \
-  -c 16384 --port 8000 --alias plamo-3-translate --jinja --no-prefill-assistant
+  -c 16384 --port 8000 --alias plamo-3-translate --jinja --no-prefill-assistant \
+  --host 0.0.0.0
 ```
 
 - `--alias` は `plamo-3-translate` 固定（拡張側のモデル名）
@@ -44,9 +45,10 @@ llama-server -hf pfnet/plamo-3-translate-2b-GGUF:Q4_K_M \
 CUDA_VISIBLE_DEVICES=0 \
 ./speech.cpp/build/speech serve irodori-tts:q8_0 \
       --device Vulkan1 \
+      --host 0.0.0.0 \
       --port 8080 \
       --cors-origin chrome-extension://<拡張ID> \
-      --add-voice heroine=heroine.voice.gguf \
+      --add-voice heroine=voices/heroine.voice.gguf \
       --voice heroine \
       --seed 42 \
       --steps 40 \
